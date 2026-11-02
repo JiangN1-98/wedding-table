@@ -194,7 +194,7 @@ export function ImportDialog({
           </div>
         </div>
         <a
-          href="/templates/guest-template.xlsx"
+          href={`${import.meta.env.BASE_URL}templates/guest-template.xlsx`}
           download="婚礼宾客名单模板.xlsx"
           className="btn px-3! py-2! text-xs!"
         >

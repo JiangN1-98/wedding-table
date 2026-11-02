@@ -724,7 +724,7 @@ function App() {
               </button>
               <div className="mt-3 flex justify-center">
                 <a
-                  href="/templates/guest-template.xlsx"
+                  href={`${import.meta.env.BASE_URL}templates/guest-template.xlsx`}
                   download="婚礼宾客名单模板.xlsx"
                   className="flex items-center gap-1.5 text-[10px] text-[#99a589] hover:text-sage-600"
                 >
