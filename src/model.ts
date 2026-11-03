@@ -309,3 +309,31 @@ export function groupTone(group: string) {
   const index = DEFAULT_GROUPS.indexOf(group);
   return ["sage", "rose", "lavender", "sand"][index === -1 ? 3 : index];
 }
+
+export type ImportedGuest = Guest & { tableNumber?: number };
+
+export function importGuests(state: WeddingState, guests: ImportedGuest[]) {
+  const tables = state.tables.map((table) => ({ ...table, seats: [...table.seats] }));
+  for (const guest of guests) {
+    if (guest.tableNumber !== undefined && (!Number.isInteger(guest.tableNumber) || guest.tableNumber < 1 || guest.tableNumber > 200))
+      throw new Error("桌号需要填写 1～200 的整数");
+  }
+  const maxTable = Math.max(tables.length, ...guests.map((g) => g.tableNumber ?? 0));
+  while (tables.length < maxTable) tables.push(newTable(`亲友相聚 ${tables.length + 1}`));
+  let seated = 0;
+  let overflow = 0;
+  for (const guest of guests) {
+    if (!guest.tableNumber) continue;
+    const table = tables[guest.tableNumber - 1];
+    const seat = table.seats.indexOf(null);
+    if (seat === -1) { overflow++; continue; }
+    table.seats[seat] = guest.id;
+    seated++;
+  }
+  return {
+    state: { ...state, tables, guests: [...state.guests, ...guests.map(({ id, name, group, phone, note }) => ({ id, name, group, phone, note }))] },
+    seated,
+    overflow,
+    addedTables: tables.length - state.tables.length,
+  };
+}

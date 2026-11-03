@@ -1,7 +1,7 @@
-import type { Guest, WeddingState } from "./model";
-import { uid, locateGuest } from "./model";
+import type { ImportedGuest, WeddingState } from "./model.ts";
+import { uid, locateGuest } from "./model.ts";
 export type ImportPreview = {
-  guests: Guest[];
+  guests: ImportedGuest[];
   skipped: number;
   filename: string;
 };
@@ -38,13 +38,14 @@ export async function readGuestFile(file: File): Promise<ImportPreview> {
     ["手机号", "手机号码", "电话"].includes(h),
   );
   const noteIndex = headers.indexOf("备注");
+  const tableIndex = headers.indexOf("桌号");
   const get = (row: unknown[], index: number) =>
     index < 0 ? "" : String(row[index] ?? "").trim();
-  const guests: Guest[] = [];
+  const guests: ImportedGuest[] = [];
   let skipped = 0;
   for (const row of rows.slice(1)) {
     if (
-      [nameIndex, groupIndex, phoneIndex, noteIndex].every((i) => !get(row, i))
+      [nameIndex, groupIndex, phoneIndex, noteIndex, tableIndex].every((i) => !get(row, i))
     )
       continue;
     const name = get(row, nameIndex);
@@ -58,7 +59,11 @@ export async function readGuestFile(file: File): Promise<ImportPreview> {
       skipped++;
       continue;
     }
+    const tableText = get(row, tableIndex);
+    if (tableText && (!/^\d+$/.test(tableText) || Number(tableText) < 1 || Number(tableText) > 200))
+      throw new Error(`宾客「${name}」的桌号无效，请填写 1～200 的整数，或留空待安排`);
     guests.push({
+      tableNumber: tableText ? Number(tableText) : undefined,
       id: uid(),
       name,
       group: get(row, groupIndex) || "其他宾客",

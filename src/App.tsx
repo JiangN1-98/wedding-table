@@ -58,6 +58,7 @@ import {
   DEFAULT_GROUPS,
   STORAGE_KEY,
   deleteGuest,
+  importGuests,
   groupTone,
   loadWedding,
   locateGuest,
@@ -1119,14 +1120,16 @@ function App() {
       ) : null}
       {dialog?.type === "import" ? (
         <ImportDialog
+          state={state}
           onClose={() => setDialog(null)}
           onImport={(guests) => {
-            commit({ ...state, guests: [...state.guests, ...guests] });
+            const result = importGuests(state, guests);
+            commit(result.state);
             setDialog(null);
-            setFilter("pending");
+            setFilter(result.seated ? "all" : "pending");
             setGroup("all");
             setQuery("");
-            notify(`成功导入 ${guests.length} 位宾客`);
+            notify(`成功导入 ${guests.length} 位宾客，已入座 ${result.seated} 人${result.overflow ? `，${result.overflow} 人因满桌待安排` : ""}`);
           }}
         />
       ) : null}

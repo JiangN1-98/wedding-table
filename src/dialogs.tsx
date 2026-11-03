@@ -1,3 +1,4 @@
+import { importGuests, type ImportedGuest } from "./model";
 import { useRef, useState } from "react";
 import {
   AlertCircle,
@@ -146,10 +147,12 @@ export function GuestDialog({
 }
 
 export function ImportDialog({
+  state,
   onImport,
   onClose,
 }: {
-  onImport: (guests: Guest[]) => void;
+  state: WeddingState;
+  onImport: (guests: ImportedGuest[]) => void;
   onClose: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -158,6 +161,7 @@ export function ImportDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [over, setOver] = useState(false);
+  const plan = preview ? importGuests(state, preview.guests) : null;
   async function read(file?: File) {
     if (!file) return;
     const token = ++request.current;
@@ -189,7 +193,7 @@ export function ImportDialog({
               宾客名单模板.xlsx
             </p>
             <p className="mt-1 text-[10px] text-[#929d83]">
-              姓名、分组、手机号、备注 · 含填写示例
+              姓名、分组、手机号、备注、桌号 · 含填写示例
             </p>
           </div>
         </div>
@@ -267,7 +271,7 @@ export function ImportDialog({
             <table className="w-full text-left text-xs">
               <thead className="sticky top-0 bg-[#f2f5ee] text-[#7b8c6c]">
                 <tr>
-                  {["姓名", "分组", "手机号", "备注"].map((h) => (
+                  {["姓名", "分组", "手机号", "备注", "桌号"].map((h) => (
                     <th key={h} className="px-3 py-2.5 font-medium">
                       {h}
                     </th>
@@ -295,11 +299,16 @@ export function ImportDialog({
                     >
                       {g.note || "—"}
                     </td>
+                    <td className="whitespace-nowrap px-3 py-2.5">{g.tableNumber ? `${g.tableNumber} 桌` : "待安排"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {plan ? <p className="mt-3 text-xs leading-5 text-sage-600">
+            将入座 {plan.seated} 人，待安排 {preview.guests.length - plan.seated} 人，新增 {plan.addedTables} 桌。
+            {plan.overflow ? `其中 ${plan.overflow} 人因对应桌已满，保留为待安排。` : ""}
+          </p> : null}
           {preview.skipped ? (
             <p className="mt-2 text-[11px] text-[#b49367]">
               跳过 {preview.skipped}{" "}
@@ -312,7 +321,7 @@ export function ImportDialog({
         </div>
       ) : (
         <p className="mt-4 text-[11px] leading-5 text-[#9ca592]">
-          第一行保留「姓名」列，其他信息可选填。只读取第一个工作表。
+          第一行保留「姓名」列，其他信息可选填。桌号填写 1～200 的整数，自动补建缺少的桌子；留空或满桌则待安排。只读取第一个工作表。
         </p>
       )}
       <div className="mt-6 flex justify-end gap-2 border-t border-[#edf0e8] pt-4">
