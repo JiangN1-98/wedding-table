@@ -174,13 +174,20 @@ export function RoundTable({
     id: `table-${table.id}`,
     data: { type: "table", tableId: table.id },
   });
+  const drag = useDraggable({
+    id: `move-round-table-${table.id}`,
+    data: { type: "move-table", tableId: table.id },
+  });
   const count = table.seats.filter(Boolean).length;
   return (
     <div className="table-unit group flex flex-col items-center">
       <div className="table-stage">
         <button
-          ref={setNodeRef}
-          className={`table-disc ${isOver ? "is-over" : ""}`}
+          ref={(node) => { setNodeRef(node); drag.setNodeRef(node); }}
+          {...drag.attributes}
+          {...drag.listeners}
+          title="拖动调整桌位，点击编辑桌号和名称"
+          className={`table-disc ${isOver ? "is-over" : ""} ${drag.isDragging ? "opacity-30" : ""}`}
           onClick={onTableClick}
           aria-label={`第${number}桌 ${table.name}，${count}人，共10个座位`}
         >
@@ -226,7 +233,7 @@ export function RoundTable({
         <button
           aria-label={`管理第${number}桌`}
           onClick={onEdit}
-          className="icon-btn h-5! w-5! opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+          className="icon-btn h-5! w-5!"
         >
           <Pencil size={11} />
         </button>

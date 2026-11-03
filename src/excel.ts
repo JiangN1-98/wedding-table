@@ -1,5 +1,5 @@
 import type { ImportedGuest, WeddingState } from "./model.ts";
-import { uid, locateGuest } from "./model.ts";
+import { uid, locateGuest, tableNumber } from "./model.ts";
 export type ImportPreview = {
   guests: ImportedGuest[];
   skipped: number;
@@ -86,7 +86,7 @@ export async function exportSeating(state: WeddingState) {
       分组: g.group,
       手机号: g.phone,
       备注: g.note,
-      桌号: location ? state.tables.indexOf(location.table) + 1 : "",
+      桌号: location ? tableNumber(location.table, state.tables.indexOf(location.table)) : "",
       桌名: location?.table.name ?? "待安排",
       座位号: location ? location.seat + 1 : "",
     };
@@ -106,7 +106,7 @@ export async function exportSeating(state: WeddingState) {
   XLSX.utils.book_append_sheet(workbook, sheet, "宾客座位表");
   const overview = XLSX.utils.json_to_sheet(
     state.tables.map((t, i) => ({
-      桌号: i + 1,
+      桌号: tableNumber(t, i),
       桌名: t.name,
       已安排: t.seats.filter(Boolean).length,
       容量: 10,

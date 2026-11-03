@@ -346,6 +346,7 @@ export function ImportDialog({
 export function TableDialog({
   table,
   number,
+  usedNumbers,
   guestMap,
   onSave,
   onRemove,
@@ -354,13 +355,19 @@ export function TableDialog({
 }: {
   table: WeddingTable;
   number: number;
+  usedNumbers: number[];
   guestMap: Map<string, Guest>;
-  onSave: (name: string) => void;
+  onSave: (name: string, number: number) => void;
   onRemove: (id: string) => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(table.name);
+  const [numberText, setNumberText] = useState(String(number));
+  const nextNumber = Number(numberText);
+  const error = !/^\d+$/.test(numberText) || !Number.isInteger(nextNumber) || nextNumber < 1 || nextNumber > 200
+    ? "桌号需要填写 1～200 的整数"
+    : usedNumbers.includes(nextNumber) ? `第 ${nextNumber} 桌已存在，请使用其他桌号` : "";
   return (
     <Modal
       title={`第 ${String(number).padStart(2, "0")} 桌 · 桌次管理`}
@@ -370,9 +377,15 @@ export function TableDialog({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (name.trim()) onSave(name.trim());
+          if (name.trim() && !error) onSave(name.trim(), nextNumber);
         }}
       >
+        <label htmlFor="table-number" className="field-label">桌号</label>
+        <input id="table-number" className="field mb-2" inputMode="numeric" value={numberText}
+          onChange={(e) => setNumberText(e.target.value)} required aria-invalid={!!error} aria-describedby="table-number-help" />
+        <p id="table-number-help" className={`mb-4 text-xs ${error ? "text-red-600" : "text-[#859575]"}`} role={error ? "alert" : undefined}>
+          {error || "桌号为 1～200，不可与其他桌子重复。"}
+        </p>
         <label htmlFor="table-name" className="field-label">
           桌子名称
         </label>
@@ -385,7 +398,7 @@ export function TableDialog({
             maxLength={20}
             required
           />
-          <button className="btn btn-primary shrink-0" disabled={!name.trim()}>
+          <button className="btn btn-primary shrink-0" disabled={!name.trim() || !!error}>
             保存
           </button>
         </div>

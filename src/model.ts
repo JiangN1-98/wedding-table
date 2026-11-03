@@ -9,6 +9,7 @@ export type Guest = {
   note: string;
 };
 export type WeddingTable = {
+  number?: number;
   id: string;
   name: string;
   seats: (string | null)[];
@@ -39,6 +40,25 @@ export const newTable = (name: string): WeddingTable => ({
   seats: Array(CAPACITY).fill(null),
 });
 
+export const tableNumber = (table: WeddingTable, index: number) => table.number ?? index + 1;
+export function nextTableNumber(tables: WeddingTable[]) {
+  const used = new Set(tables.map(tableNumber));
+  let number = 1;
+  while (used.has(number)) number++;
+  return number;
+}
+export function updateTable(state: WeddingState, id: string, number: number, name: string) {
+  if (!Number.isSafeInteger(number) || number < 1 || number > 200)
+    return { state, error: "桌号需要填写 1～200 的整数" };
+  if (state.tables.some((table, i) => table.id !== id && tableNumber(table, i) === number))
+    return { state, error: `第 ${number} 桌已存在，请使用其他桌号` };
+  if (!name.trim()) return { state, error: "请输入桌子名称" };
+  return { state: { ...state, tables: state.tables.map((table, i) => ({
+    ...table, number: table.id === id ? number : tableNumber(table, i),
+    name: table.id === id ? name.trim() : table.name,
+  })) } };
+}
+
 export function createInitialState(): WeddingState {
   return {
     version: 1,
@@ -47,7 +67,7 @@ export function createInitialState(): WeddingState {
     venue: "",
     isDemo: false,
     guests: [],
-    tables: Array.from({ length: 3 }, (_, i) => newTable(`亲友相聚 ${i + 1}`)),
+    tables: Array.from({ length: 3 }, (_, i) => ({ ...newTable(`亲友相聚 ${i + 1}`), number: i + 1 })),
   };
 }
 
@@ -79,7 +99,8 @@ export function isWeddingState(value: unknown): value is WeddingState {
   }
   const seated = new Set<string>();
   const tableIds = new Set<string>();
-  for (const t of v.tables) {
+  const numbers = new Set<number>();
+  for (const [index, t] of v.tables.entries()) {
     if (
       !t ||
       typeof t.id !== "string" ||
@@ -89,6 +110,9 @@ export function isWeddingState(value: unknown): value is WeddingState {
       t.seats.length !== CAPACITY
     )
       return false;
+    const number = tableNumber(t, index);
+    if (!Number.isSafeInteger(number) || number < 1 || number > 200 || numbers.has(number)) return false;
+    numbers.add(number);
     tableIds.add(t.id);
     for (const id of t.seats) {
       if (id === null) continue;
@@ -241,7 +265,7 @@ export function loadWedding(): WeddingState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const data: unknown = JSON.parse(raw);
-      if (isWeddingState(data)) return data;
+      if (isWeddingState(data)) return { ...data, tables: data.tables.map((table, i) => ({ ...table, number: tableNumber(table, i) })) };
     }
   } catch {
     /* A blocked or malformed local store should not prevent opening the planner. */
@@ -313,18 +337,21 @@ export function groupTone(group: string) {
 export type ImportedGuest = Guest & { tableNumber?: number };
 
 export function importGuests(state: WeddingState, guests: ImportedGuest[]) {
-  const tables = state.tables.map((table) => ({ ...table, seats: [...table.seats] }));
+  const tables = state.tables.map((table, i) => ({ ...table, number: tableNumber(table, i), seats: [...table.seats] }));
   for (const guest of guests) {
     if (guest.tableNumber !== undefined && (!Number.isInteger(guest.tableNumber) || guest.tableNumber < 1 || guest.tableNumber > 200))
       throw new Error("桌号需要填写 1～200 的整数");
   }
-  const maxTable = Math.max(tables.length, ...guests.map((g) => g.tableNumber ?? 0));
-  while (tables.length < maxTable) tables.push(newTable(`亲友相聚 ${tables.length + 1}`));
+  const maxTable = Math.max(0, ...guests.map((g) => g.tableNumber ?? 0));
+  for (let number = 1; number <= maxTable; number++) {
+    if (!tables.some((table) => table.number === number))
+      tables.push({ ...newTable(`亲友相聚 ${number}`), number });
+  }
   let seated = 0;
   let overflow = 0;
   for (const guest of guests) {
     if (!guest.tableNumber) continue;
-    const table = tables[guest.tableNumber - 1];
+    const table = tables.find((table) => table.number === guest.tableNumber)!;
     const seat = table.seats.indexOf(null);
     if (seat === -1) { overflow++; continue; }
     table.seats[seat] = guest.id;

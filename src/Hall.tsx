@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Flower2, Grip, Plus } from "lucide-react";
 import type { HallLayout, TablePosition, WeddingTable } from "./model";
-import { positionKey } from "./model";
+import { positionKey, tableNumber } from "./model";
 
 export function TableMarker({
   table,
@@ -66,6 +66,7 @@ function HallSlot({
   table,
   number,
   editing,
+  draggingTable,
   selected,
   onSelect,
   onMove,
@@ -76,6 +77,7 @@ function HallSlot({
   table?: WeddingTable;
   number: number;
   editing: boolean;
+  draggingTable: boolean;
   selected: boolean;
   onSelect: () => void;
   onMove: (position: TablePosition) => void;
@@ -83,7 +85,7 @@ function HallSlot({
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `hall-slot-${positionKey(position)}`,
-    disabled: !editing,
+
     data: { type: "hall-slot", position },
   });
   return (
@@ -91,7 +93,7 @@ function HallSlot({
       ref={setNodeRef}
       data-position={positionKey(position)}
       data-table-id={table?.id}
-      className={`hall-slot ${editing ? "is-editable" : ""} ${isOver ? "is-over" : ""} ${table ? "has-table" : ""}`}
+      className={`hall-slot ${editing || draggingTable ? "is-editable" : ""} ${isOver ? "is-over" : ""} ${table ? "has-table" : ""}`}
       style={{ gridColumn, gridRow: position.row + 2 }}
     >
       {editing ? (
@@ -119,7 +121,7 @@ function HallSlot({
           )}
         </>
       ) : (
-        children
+        table ? children : draggingTable ? <div className="empty-hall-slot"><Plus size={18} /><span>放置桌子</span></div> : null
       )}
     </div>
   );
@@ -130,6 +132,7 @@ export function Hall({
   layout,
   zoom,
   editing,
+  draggingTable,
   selectedTable,
   onSelectTable,
   onMoveTable,
@@ -140,6 +143,7 @@ export function Hall({
   layout: HallLayout;
   zoom: number;
   editing: boolean;
+  draggingTable: boolean;
   selectedTable: string | null;
   onSelectTable: (id: string) => void;
   onMoveTable: (position: TablePosition) => void;
@@ -163,12 +167,12 @@ export function Hall({
       zoom) /
     100;
   const rows =
-    Math.max(1, ...layout.positions.map((p) => p.row + 1)) + (editing ? 1 : 0);
+    Math.max(1, ...layout.positions.map((p) => p.row + 1)) + 1;
   const positions = new Map(
     layout.positions.map((p) => [positionKey(p), p.tableId]),
   );
   const tableMap = new Map(
-    tables.map((table, i) => [table.id, { table, number: i + 1 }]),
+    tables.map((table, i) => [table.id, { table, number: tableNumber(table, i) }]),
   );
   const slots = Array.from({ length: rows }, (_, row) =>
     (["left", "right"] as const).flatMap((side) =>
@@ -226,6 +230,7 @@ export function Hall({
                 table={entry?.table}
                 number={entry?.number ?? 0}
                 editing={editing}
+                draggingTable={draggingTable}
                 selected={!!id && selectedTable === id}
                 onSelect={() => {
                   if (id) onSelectTable(id);

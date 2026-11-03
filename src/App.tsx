@@ -64,6 +64,9 @@ import {
   locateGuest,
   moveGuest,
   newTable,
+  tableNumber,
+  nextTableNumber,
+  updateTable,
   getHallLayout,
   moveTable,
   setHallColumns,
@@ -113,6 +116,7 @@ const detectCollision: CollisionDetection = (args) => {
       ? pointerWithin(tableArgs)
       : rectIntersection(tableArgs);
   }
+  args = { ...args, droppableContainers: args.droppableContainers.filter((c) => c.data.current?.type !== "hall-slot") };
   const hits = pointerWithin(args);
   const collisions = hits.length ? hits : rectIntersection(args);
   return [...collisions].sort((a, b) => {
@@ -186,7 +190,7 @@ function App() {
     state.tables.forEach((table, tableIndex) =>
       table.seats.forEach((id, seat) => {
         if (id)
-          map.set(id, { tableId: table.id, tableNumber: tableIndex + 1, seat });
+          map.set(id, { tableId: table.id, tableNumber: tableNumber(table, tableIndex), seat });
       }),
     );
     return map;
@@ -356,11 +360,10 @@ function App() {
     setView("canvas");
   }
   function addTable() {
-    const taken = new Set(state.tables.map((t) => t.name));
-    let n = state.tables.length + 1;
-    while (taken.has(`亲友相聚 ${n}`)) n++;
-    commit({ ...state, tables: [...state.tables, newTable(`亲友相聚 ${n}`)] });
-    notify(`已添加第 ${state.tables.length + 1} 桌`);
+    const n = nextTableNumber(state.tables);
+    if (n > 200) { notify("最多支持 200 张桌子", true); return; }
+    commit({ ...state, tables: [...state.tables.map((table, i) => ({ ...table, number: tableNumber(table, i) })), { ...newTable(`亲友相聚 ${n}`), number: n }] });
+    notify(`已添加第 ${n} 桌`);
   }
   function confirmAction() {
     if (dialog?.type !== "confirm") return;
@@ -374,7 +377,7 @@ function App() {
         guests: [],
         layout: undefined,
         tables: Array.from({ length: 3 }, (_, i) =>
-          newTable(`亲友相聚 ${i + 1}`),
+          ({ ...newTable(`亲友相聚 ${i + 1}`), number: i + 1 }),
         ),
       });
       setQuery("");
@@ -814,7 +817,7 @@ function App() {
                       {locations.has(selected.id) ? "，或点击已占座位交换" : ""}
                     </span>
                   ) : (
-                    "舞台在前 · 中央过道 · 两侧入席 · Ctrl + 滚轮缩放"
+                    "拖动圆桌中心调整位置 · 点击编辑桌号 · Ctrl + 滚轮缩放"
                   )}
                 </span>
                 <div className="flex shrink-0 items-center gap-2">
@@ -883,6 +886,7 @@ function App() {
                   layout={hallLayout}
                   zoom={zoom}
                   editing={editingLayout}
+                  draggingTable={!!activeTable}
                   selectedTable={selectedTable}
                   onSelectTable={(id) => {
                     if (selectedTable && selectedTable !== id) {
@@ -928,7 +932,7 @@ function App() {
                         <div className="mb-3 flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <span className="table-number text-[25px]!">
-                              {String(index + 1).padStart(2, "0")}
+                              {String(tableNumber(table, index)).padStart(2, "0")}
                             </span>
                             <span className="text-xs font-medium text-[#718663]">
                               {table.name}
@@ -939,7 +943,7 @@ function App() {
                           </div>
                           <button
                             className="icon-btn"
-                            aria-label={`管理第${index + 1}桌`}
+                            aria-label={`管理第${tableNumber(table, index)}桌`}
                             onClick={() =>
                               setDialog({ type: "table", id: table.id })
                             }
@@ -1083,7 +1087,7 @@ function App() {
         {activeTable && state.tables.some((t) => t.id === activeTable) ? (
           <TableMarker
             table={state.tables.find((t) => t.id === activeTable)!}
-            number={state.tables.findIndex((t) => t.id === activeTable) + 1}
+            number={tableNumber(state.tables.find((t) => t.id === activeTable)!, state.tables.findIndex((t) => t.id === activeTable))}
             dragging
           />
         ) : activeGuest && guestMap.has(activeGuest) ? (
@@ -1137,17 +1141,16 @@ function App() {
         <TableDialog
           key={inspectedTable.id}
           table={inspectedTable}
-          number={state.tables.indexOf(inspectedTable) + 1}
+          number={tableNumber(inspectedTable, state.tables.indexOf(inspectedTable))}
+          usedNumbers={state.tables.filter((t) => t.id !== inspectedTable.id).map((t) => tableNumber(t, state.tables.indexOf(t)))}
           guestMap={guestMap}
           onClose={() => setDialog(null)}
-          onSave={(name) => {
-            commit({
-              ...state,
-              tables: state.tables.map((t) =>
-                t.id === inspectedTable.id ? { ...t, name } : t,
-              ),
-            });
-            notify("桌子名称已更新");
+          onSave={(name, number) => {
+            const result = updateTable(state, inspectedTable.id, number, name);
+            if (result.error) { notify(result.error, true); return; }
+            commit(result.state);
+            setDialog(null);
+            notify("桌号和名称已更新");
           }}
           onRemove={(id) => assign(id, null)}
           onDelete={() =>

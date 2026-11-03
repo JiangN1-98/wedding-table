@@ -2,6 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   createInitialState,
+  updateTable,
+  tableNumber,
+  nextTableNumber,
+  importGuests,
   deleteGuest,
   isWeddingState,
   locateGuest,
@@ -251,4 +255,35 @@ test("saved plan validation rejects duplicate occupancy, duplicate IDs and orpha
     false,
   );
   assert.deepEqual(newTable("亲友相聚").seats, Array(10).fill(null));
+});
+
+
+test("table numbers are unique, stable across moves and deletion, and invalid edits are rejected", () => {
+  const initial = createInitialState();
+  const renamed = updateTable(initial, initial.tables[0].id, 8, "家人").state;
+  assert.deepEqual(renamed.tables.map(tableNumber), [8, 2, 3]);
+  assert.deepEqual(initial.tables.map(tableNumber), [1, 2, 3]);
+  for (const number of [2, 0, -1, 1.5, 201, NaN]) {
+    const result = updateTable(renamed, renamed.tables[0].id, number, "家人");
+    assert.ok(result.error);
+    assert.equal(result.state, renamed);
+  }
+  const moved = moveTable(renamed, renamed.tables[0].id, getHallLayout(renamed).positions[1]).state;
+  assert.deepEqual(moved.tables.map(tableNumber), [8, 2, 3]);
+  const deleted = { ...moved, layout: undefined, tables: moved.tables.slice(1) };
+  assert.deepEqual(deleted.tables.map(tableNumber), [2, 3]);
+  assert.equal(nextTableNumber(deleted.tables), 1);
+  assert.ok(isWeddingState(renamed));
+  assert.ok(!isWeddingState({ ...renamed, tables: renamed.tables.map((t) => ({ ...t, number: 8 })) }));
+});
+
+test("imports use edited table numbers and leave numbering intact without requested seats", () => {
+  const initial = createInitialState();
+  const state = updateTable(initial, initial.tables[0].id, 8, "家人").state;
+  const guest = { id: "import-number", name: "测试宾客", group: "家人", phone: "", note: "" };
+  const pending = importGuests(state, [guest]);
+  assert.deepEqual(pending.state.tables.map(tableNumber), [8, 2, 3]);
+  const seated = importGuests(state, [{ ...guest, tableNumber: 8 }]);
+  assert.equal(locateGuest(seated.state, guest.id)?.table.id, initial.tables[0].id);
+  assert.ok(isWeddingState(seated.state));
 });
