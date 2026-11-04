@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Check, Flower2, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
-import { CAPACITY, groupTone } from "./model";
+import { groupTone } from "./model";
 import type { Guest, WeddingTable } from "./model";
+import { seatCenters } from "./hallGeometry";
 
 export function Avatar({
   guest,
@@ -93,13 +94,7 @@ export function GuestRow({
   );
 }
 
-const seatPositions = Array.from({ length: CAPACITY }, (_, i) => {
-  const angle = ((-90 + i * 36) * Math.PI) / 180;
-  return {
-    left: `${139 + Math.cos(angle) * 106}px`,
-    top: `${126 + Math.sin(angle) * 107}px`,
-  };
-});
+const seatPositions = seatCenters.map(({ x, y }) => ({ left: x, top: y }));
 
 function Seat({
   table,
@@ -133,7 +128,7 @@ function Seat({
       {...(guest ? drag.attributes : {})}
       onClick={onClick}
       className={`seat ${guest ? `occupied tone-${groupTone(guest.group)}` : canSelect ? "available" : ""} ${drop.isOver ? "is-over" : ""} ${drag.isDragging ? "is-dragging" : ""}`}
-      style={seatPositions[index] as CSSProperties}
+      style={seatPositions[index]}
       aria-label={`${table.name}，${index + 1}号座位，${guest?.name ?? "空位"}`}
       title={
         guest

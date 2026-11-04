@@ -4,6 +4,13 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Flower2, Grip, Plus } from "lucide-react";
 import type { HallLayout, TablePosition, WeddingTable } from "./model";
 import { positionKey, tableNumber } from "./model";
+import {
+  HALL_AISLE_WIDTH,
+  HALL_CELL_WIDTH,
+  HALL_ROW_HEIGHT,
+  HALL_STAGE_HEIGHT,
+  hallWidth,
+} from "./hallGeometry";
 
 export function TableMarker({
   table,
@@ -160,8 +167,8 @@ export function Hall({
     return () => observer.disconnect();
   }, []);
   const columns = layout.columnsPerSide;
-  const cellWidth = editing ? 148 : 278;
-  const surfaceWidth = columns * 2 * cellWidth + columns * 2 * 12 + 88 + 32;
+  const cellWidth = editing ? 148 : HALL_CELL_WIDTH;
+  const surfaceWidth = hallWidth(columns, cellWidth);
   const scale =
     (Math.min(1, Math.max(editing ? 0.25 : 0.15, (width - 32) / surfaceWidth)) *
       zoom) /
@@ -188,8 +195,8 @@ export function Hall({
         <div
           className="banquet-plan"
           style={{
-            gridTemplateColumns: `repeat(${columns}, ${cellWidth}px) 88px repeat(${columns}, ${cellWidth}px)`,
-            gridTemplateRows: `82px repeat(${rows}, ${editing ? 154 : 288}px)`,
+            gridTemplateColumns: `repeat(${columns}, ${cellWidth}px) ${HALL_AISLE_WIDTH}px repeat(${columns}, ${cellWidth}px)`,
+            gridTemplateRows: `${HALL_STAGE_HEIGHT}px repeat(${rows}, ${editing ? 154 : HALL_ROW_HEIGHT}px)`,
           }}
           aria-label={`宴会厅布局：上方舞台，中央过道，两侧各${columns}列圆桌`}
         >

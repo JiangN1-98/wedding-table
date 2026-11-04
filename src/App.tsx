@@ -24,6 +24,7 @@ import {
   Download,
   Flower2,
   Heart,
+  ImageDown,
   LayoutGrid,
   Leaf,
   List,
@@ -40,6 +41,7 @@ import {
   ShieldCheck,
   Sparkles,
   Table2,
+  Trash2,
   Upload,
   UserRoundPlus,
   UsersRound,
@@ -57,6 +59,7 @@ import {
   CAPACITY,
   DEFAULT_GROUPS,
   STORAGE_KEY,
+  createInitialState,
   deleteGuest,
   importGuests,
   groupTone,
@@ -80,7 +83,7 @@ type Dialog =
   | { type: "table"; id: string }
   | {
       type: "confirm";
-      action: "clear" | "delete-table" | "delete-guest";
+      action: "reset" | "clear" | "delete-table" | "delete-guest";
       id?: string;
     };
 type Filter = "pending" | "all" | "seated";
@@ -172,6 +175,7 @@ function App() {
   const [view, setView] = useState<"canvas" | "list">("canvas");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingImage, setExportingImage] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 7 } }),
@@ -268,19 +272,22 @@ function App() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       setSaveFailed(false);
+      return true;
     } catch {
       setSaveFailed(true);
       notify("本地保存失败，请导出座位表备份", true);
+      return false;
     }
   }
-  function commit(next: WeddingState) {
-    if (next === state) return;
+  function commit(next: WeddingState, { requireSave = false } = {}) {
+    if (next === state) return true;
     next = { ...next, layout: getHallLayout(next) };
-    save(next);
+    if (!save(next) && requireSave) return false;
     setHistory((previous) => ({
       present: next,
       past: [...previous.past.slice(-29), previous.present],
     }));
+    return true;
   }
   function undo() {
     const previous = history.past.at(-1);
@@ -367,25 +374,22 @@ function App() {
   }
   function confirmAction() {
     if (dialog?.type !== "confirm") return;
-    if (dialog.action === "clear") {
-      commit({
-        ...state,
-        isDemo: false,
-        title: state.isDemo ? "我们的婚礼" : state.title,
-        date: state.isDemo ? "" : state.date,
-        venue: state.isDemo ? "" : state.venue,
-        guests: [],
-        layout: undefined,
-        tables: Array.from({ length: 3 }, (_, i) =>
-          ({ ...newTable(`亲友相聚 ${i + 1}`), number: i + 1 }),
-        ),
-      });
+    if (dialog.action === "reset" || dialog.action === "clear") {
+      const initial = createInitialState();
+      const next = dialog.action === "clear" && !state.isDemo
+        ? { ...initial, title: state.title, date: state.date, venue: state.venue }
+        : initial;
+      if (!commit(next, { requireSave: true })) return;
       setQuery("");
       setGroup("all");
       setFilter("pending");
       setSelectedGuest(null);
       setSelectedTable(null);
-      notify("已清空，可导入你的宾客名单");
+      setEditingLayout(false);
+      setView("canvas");
+      setZoom(100);
+      canvasRef.current?.scrollTo(0, 0);
+      notify(dialog.action === "reset" ? "已恢复初始状态" : "已清空，可导入你的宾客名单");
     } else if (dialog.action === "delete-table") {
       commit({
         ...state,
@@ -408,6 +412,18 @@ function App() {
       notify("导出失败，请重试", true);
     } finally {
       setExporting(false);
+    }
+  }
+  async function handleExportImage() {
+    setExportingImage(true);
+    try {
+      const { downloadHallImage } = await import("./hallImage");
+      const format = await downloadHallImage(state, hallLayout, guestMap);
+      notify(`已开始下载座位图（${format}）`);
+    } catch {
+      notify("座位图导出失败，请重试", true);
+    } finally {
+      setExportingImage(false);
     }
   }
 
@@ -491,7 +507,14 @@ function App() {
               轻松安排每一席，让美好的相聚从这里开始。
             </p>
           </div>
-          <div className="mb-0.5 flex items-center gap-2">
+          <div className="mb-0.5 flex flex-wrap items-center gap-2">
+            <button
+              className="btn border-[#ecdcd6]! text-[#a2685d]! hover:bg-[#fbf4f1]!"
+              onClick={() => setDialog({ type: "confirm", action: "reset" })}
+            >
+              <Trash2 size={14} />
+              清空数据
+            </button>
             <button
               className="btn"
               onClick={() => setDialog({ type: "import" })}
@@ -748,7 +771,16 @@ function App() {
                   圆桌 · 10 人 / 桌
                 </span>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  className="btn px-3! py-2! text-[11px]!"
+                  disabled={exportingImage}
+                  onClick={() => void handleExportImage()}
+                  title="按 100% 原始布局下载高清座位图"
+                >
+                  <ImageDown size={13} />
+                  {exportingImage ? "正在生成座位图…" : "导出座位图"}
+                </button>
                 <button
                   onClick={() => {
                     if (!isFullscreen) setView("canvas");
@@ -1177,22 +1209,26 @@ function App() {
       {dialog?.type === "confirm" ? (
         <Modal
           title={
-            dialog.action === "clear"
-              ? "开始一场属于你的婚礼"
-              : dialog.action === "delete-table"
-                ? "删除这张桌子？"
-                : "删除这位宾客？"
+            dialog.action === "reset"
+              ? "清空数据并恢复初始状态？"
+              : dialog.action === "clear"
+                ? "开始一场属于你的婚礼"
+                : dialog.action === "delete-table"
+                  ? "删除这张桌子？"
+                  : "删除这位宾客？"
           }
           onClose={() => setDialog(null)}
         >
           <p className="text-sm leading-7 text-[#8b9b7b]">
-            {dialog.action === "clear"
-              ? "这会清空当前宾客和座位安排，并留下 3 张空桌。随后可导入你的宾客名单，或手动添加宾客。"
-              : dialog.action === "delete-table"
-                ? "本桌所有宾客会移回待安排名单，你可以为他们重新安排座位。"
-                : "这位宾客会从名单移除，已占用的座位也会空出。"}
+            {dialog.action === "reset"
+              ? "这会清空宾客、座位安排和桌位布局，重置婚礼名称、日期与地点，并恢复 3 张默认空桌。"
+              : dialog.action === "clear"
+                ? "这会清空当前宾客和座位安排，并留下 3 张空桌。随后可导入你的宾客名单，或手动添加宾客。"
+                : dialog.action === "delete-table"
+                  ? "本桌所有宾客会移回待安排名单，你可以为他们重新安排座位。"
+                  : "这位宾客会从名单移除，已占用的座位也会空出。"}
             <span className="mt-2 block text-xs text-[#a5b098]">
-              操作后可通过座位图右上角的撤销按钮恢复。
+              刷新页面前，可通过座位图右上角的撤销按钮恢复。
             </span>
           </p>
           <div className="mt-6 flex justify-end gap-2">
@@ -1200,7 +1236,11 @@ function App() {
               取消
             </button>
             <button className="btn btn-primary" onClick={confirmAction}>
-              {dialog.action === "clear" ? "清空并开始" : "确认删除"}
+              {dialog.action === "reset"
+                ? "清空并初始化"
+                : dialog.action === "clear"
+                  ? "清空并开始"
+                  : "确认删除"}
             </button>
           </div>
         </Modal>
@@ -1236,7 +1276,7 @@ function App() {
               {
                 icon: Download,
                 title: "05 · 留下美好的安排",
-                text: "点击圆桌管理桌名和人员；更改自动保存在当前浏览器，导出 Excel 座位表便于备份或交给酒店。",
+                text: "点击圆桌管理桌名和人员。更改会自动保存在当前浏览器，也可以下载 100% 原始布局的高清座位图，或导出 Excel 座位表。",
               },
             ].map((item) => (
               <div key={item.title} className="flex gap-3">
